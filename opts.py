@@ -1,6 +1,6 @@
 def model_opts(parser):
 
-    parser.add_argument('-config', default='default.yaml', type=str,
+    parser.add_argument('-config', default='', type=str,
                         help="config file")
     parser.add_argument('-gpus', default=[], nargs='+', type=int,
                         help="Use CUDA on the listed devices.")

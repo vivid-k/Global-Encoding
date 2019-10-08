@@ -1,6 +1,8 @@
 import torch
 import torch.utils.data
+import torch.nn as nn
 import lr_scheduler as L
+from rouge import Rouge
 
 import os
 import argparse
@@ -13,7 +15,6 @@ import models
 import utils
 import codecs
 
-import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -24,7 +25,39 @@ parser = argparse.ArgumentParser(description='train.py')
 opts.model_opts(parser)
 
 opt = parser.parse_args()
+
 config = utils.read_config(opt.config)
+# 手动加入yaml参数
+config['data'] = './LCSTS_ORIGIN/res/zl.'
+config['logF'] = './experiments/lcsts/'
+config['epoch'] = 20
+config['batch_size'] = 64
+config['optim'] = 'adam'
+config['cell'] = 'lstm'
+config['attention'] = 'luong_gate'
+config['learning_rate'] = 0.0003
+config['max_grad_norm'] = 10
+config['learning_rate_decay'] = 0.5
+config['start_decay_at'] = 6
+config['emb_size'] = 512
+config['hidden_size'] = 512
+config['dec_num_layers'] = 3
+config['enc_num_layers'] = 3
+config['bidirectional'] = True
+config['dropout'] = 0.0
+config['max_time_step'] = 50
+config['eval_interval'] = 10000
+config['save_interval'] = 3000
+config['metrics'] = ['rouge']
+config['shared_vocab'] = True
+config['beam_size'] = 10
+config['unk'] = True
+config['schedule'] = False
+config['selfatt'] = True
+config['schesamp'] = False
+config['swish'] = True
+config['length_norm'] = True
+config['alpha'] = 0.3
 torch.manual_seed(opt.seed)
 opts.convert_to_config(opt, config)
 
@@ -68,7 +101,6 @@ def load_data():
     return {'trainset': trainset, 'validset': validset,
             'trainloader': trainloader, 'validloader': validloader,
             'src_vocab': src_vocab, 'tgt_vocab': tgt_vocab}
-
 
 
 def build_model(checkpoints, print_log):
@@ -140,11 +172,46 @@ def train_model(model, data, optim, epoch, params):
             else:
                 loss, outputs = model(src, lengths, dec, targets)
             pred = outputs.max(2)[1]
+
+            if config.rl:
+                tgt_vocab = data['tgt_vocab']
+                sample_pred = []
+                for i in range(outputs.size(0)):
+                    sample_pred.append(torch.multinomial(outputs[i], 1))
+
+                # 计算 loss
+                criterion = nn.CrossEntropyLoss(ignore_index=utils.PAD, reduction='none')
+                criterion.cuda()
+                sample_loss = []  # [batch_size]
+                for i in range(outputs.size(1)):
+                    sample_loss.append(criterion(outputs[:, i, :], sample_pred[:, i]))
+                sample_loss = torch.tensor(sample_loss)
+
+                # 转换为词
+                pred_sen_list = [" ".join(tgt_vocab.convertToLabels(sen, utils.EOS)) for sen in pred.t()]
+                sample_pred_sen_list = [" ".join(tgt_vocab.convertToLabels(sen, utils.EOS)) for sen in sample_pred.t()]
+                reference = [" ".join(list(ori_tgt[0])) for ori_tgt in original_tgt]
+
+                # 计算 rouge
+                rouge = Rouge()
+                pred_score_list = rouge.get_scores(pred_sen_list, reference)
+                sample_pred_score_list = rouge.get_scores(sample_pred_sen_list, reference)
+
+                neg_reward = []
+                for pred_score, sample_score in zip(pred_score_list, sample_pred_score_list):
+                    pred_mean_score = 0.5 * (pred_score['rouge-2']['f'] + pred_score['rouge-l']['f'])
+                    sample_mean_score = 0.5 * (sample_score['rouge-2']['f'] + sample_score['rouge-l']['f'])
+                    neg_reward.append(sample_mean_score - pred_mean_score)
+
+                neg_reward = torch.tensor(neg_reward)
+                rl_loss = - torch.mul(sample_loss, neg_reward) / config.batch_size
             targets = targets.t()
             num_correct = pred.eq(targets).masked_select(targets.ne(utils.PAD)).sum().item()
             num_total = targets.ne(utils.PAD).sum().item()
             if config.max_split == 0:
                 loss = torch.sum(loss) / num_total
+                if config.rl:
+                    loss += config.alpha * rl_loss
                 loss.backward()
             optim.step()
 
@@ -206,9 +273,9 @@ def eval_model(model, data, params):
             else:
                 samples, alignment = model.sample(src, src_len)
 
-        candidate += [tgt_vocab.convertToLabels(s, utils.EOS) for s in samples]
-        source += original_src
-        reference += original_tgt
+        candidate += ["".join(tgt_vocab.convertToLabels(s, utils.EOS)) for s in samples]
+        source += ["".join(ori_src) for ori_src in original_src]
+        reference += [" ".join(list(ori_tgt[0])) for ori_tgt in original_tgt]
         if alignment is not None:
             alignments += [align for align in alignment]
 
@@ -232,10 +299,13 @@ def eval_model(model, data, params):
             if len(cand) == 0:
                 print('Error!')
         candidate = cands
-
+    # 分别将candidate和reference写入文件
     with codecs.open(params['log_path']+'candidate.txt','w+','utf-8') as f:
         for i in range(len(candidate)):
             f.write(" ".join(candidate[i])+'\n')
+    with codecs.open(params['log_path']+'reference.txt','w+','utf-8') as f:
+        for i in range(len(reference)):
+            f.write("".join(reference[i])+'\n')
 
     score = {}
     for metric in config.metrics:
@@ -288,7 +358,7 @@ def main():
     # checkpoint
     if opt.restore:
         print('loading checkpoint...\n')
-        checkpoints = torch.load(opt.restore, map_location = 'cuda:%d' % opt.gpus[0])
+        checkpoints = torch.load(opt.restore, map_location='cuda:%d' % opt.gpus[0])
     else:
         checkpoints = None
 
@@ -316,7 +386,6 @@ def main():
             print_log("Best %s score: %.2f\n" % (metric, max(params[metric])))
     else:
         score = eval_model(model, data, params)
-
 
 if __name__ == '__main__':
     main()
