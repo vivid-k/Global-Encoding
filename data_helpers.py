@@ -48,15 +48,15 @@ def preprocess(data_path, src_path, tgt_path):
 
 
 if __name__ == "__main__":
-    train_data_path = './LCSTS_ORIGIN/DATA/PART_I.txt'
-    train_src_path = './LCSTS_ORIGIN/res/train.src'
-    train_tgt_path = './LCSTS_ORIGIN/res/train.tgt'
-    valid_data_path = './LCSTS_ORIGIN/DATA/PART_II.txt'
-    valid_src_path = './LCSTS_ORIGIN/res/valid.src'
-    valid_tgt_path = './LCSTS_ORIGIN/res/valid.tgt'
-    test_data_path = './LCSTS_ORIGIN/DATA/PART_III.txt'
-    test_src_path = './LCSTS_ORIGIN/res/test.src'
-    test_tgt_path = './LCSTS_ORIGIN/res/test.tgt'
+    train_data_path = './DATA/PART_I.txt'
+    train_src_path = './res/train.src'
+    train_tgt_path = './res/train.tgt'
+    valid_data_path = './DATA/PART_II.txt'
+    valid_src_path = './res/valid.src'
+    valid_tgt_path = './res/valid.tgt'
+    test_data_path = './DATA/PART_III.txt'
+    test_src_path = './res/test.src'
+    test_tgt_path = './res/test.tgt'
     preprocess(train_data_path, train_src_path, train_tgt_path)
     preprocess(valid_data_path, valid_src_path, valid_tgt_path)
     preprocess(test_data_path, test_src_path, test_tgt_path)

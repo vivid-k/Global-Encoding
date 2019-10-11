@@ -2,7 +2,7 @@ def model_opts(parser):
 
     parser.add_argument('-config', default='', type=str,
                         help="config file")
-    parser.add_argument('-gpus', default=[], nargs='+', type=int,
+    parser.add_argument('-gpus', default=[1,2,3], nargs='+', type=int,
                         help="Use CUDA on the listed devices.")
     parser.add_argument('-restore', default='', type=str,
                         help="restore checkpoint")

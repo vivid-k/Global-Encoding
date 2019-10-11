@@ -1,5 +1,4 @@
 import yaml
-import os
 import time
 import sys
 
@@ -10,8 +9,9 @@ class AttrDict(dict):
 
 
 def read_config(path):
-    if path =='':
+    if path == '':
         return AttrDict()
+    
     return AttrDict(yaml.load(open(path, 'r')))
 
 
@@ -22,7 +22,6 @@ def print_log(file):
             f.write(s)
     return write_log
 
-read_config('../lcsts.yaml')
 # _, term_width = os.popen('stty size', 'r').read().split()
 # term_width = int(term_width)
 term_width = 100

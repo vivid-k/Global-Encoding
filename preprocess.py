@@ -22,14 +22,14 @@ parser.add_argument('-src_trun', type=int, default=0,
                     help="Truncate source sequence length")
 parser.add_argument('-tgt_trun', type=int, default=0,
                     help="Truncate target sequence length")
-parser.add_argument('-src_char', type=bool, defalt=True, help='character based encoding')
-parser.add_argument('-tgt_char', type=bool, defalt=True, help='character based decoding')
+parser.add_argument('-src_char', action='store_true', help='character based encoding')
+parser.add_argument('-tgt_char', action='store_true', help='character based decoding')
 parser.add_argument('-src_suf', default='src',
                     help="the suffix of the source filename")
 parser.add_argument('-tgt_suf', default='tgt',
                     help="the suffix of the target filename")
 
-parser.add_argument('-share', type=bool, defalt=True, help='share the vocabulary between source and target')
+parser.add_argument('-share', action='store_true', help='share the vocabulary between source and target')
 
 parser.add_argument('-report_every', type=int, default=100000,
                     help="Report status every this many sentences")

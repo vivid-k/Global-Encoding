@@ -28,7 +28,7 @@ opt = parser.parse_args()
 
 config = utils.read_config(opt.config)
 # 手动加入yaml参数
-config['data'] = './LCSTS_ORIGIN/res/zl.'
+config['data'] = './data/'
 config['logF'] = './experiments/lcsts/'
 config['epoch'] = 20
 config['batch_size'] = 64
@@ -58,6 +58,7 @@ config['schesamp'] = False
 config['swish'] = True
 config['length_norm'] = True
 config['alpha'] = 0.3
+config['rl'] = False
 torch.manual_seed(opt.seed)
 opts.convert_to_config(opt, config)
 
@@ -102,7 +103,6 @@ def load_data():
             'trainloader': trainloader, 'validloader': validloader,
             'src_vocab': src_vocab, 'tgt_vocab': tgt_vocab}
 
-
 def build_model(checkpoints, print_log):
     for k, v in config.items():
         print_log("%s:\t%s\n" % (str(k), str(v)))
@@ -142,6 +142,20 @@ def build_model(checkpoints, print_log):
 
     return model, optim, print_log
 
+# 以下两个函数为强化加入，在train使用
+def com_loss(outputs, targets, criterion):
+    outputs = outputs.squeeze() 
+    loss = criterion(outputs, targets)
+    return loss
+def padding(data):
+    has_eos = False
+    print(data)
+    for i, w in enumerate(data):
+        if w == utils.EOS:
+            has_eos = True
+        if has_eos == True:
+            data[i] = utils.PAD
+    return data
 
 def train_model(model, data, optim, epoch, params):
 
@@ -159,6 +173,7 @@ def train_model(model, data, optim, epoch, params):
         lengths, indices = torch.sort(src_len, dim=0, descending=True)
         src = torch.index_select(src, dim=0, index=indices)
         tgt = torch.index_select(tgt, dim=0, index=indices)
+
         dec = tgt[:, :-1]
         targets = tgt[:, 1:]
 
@@ -173,24 +188,29 @@ def train_model(model, data, optim, epoch, params):
                 loss, outputs = model(src, lengths, dec, targets)
             pred = outputs.max(2)[1]
 
+            # 加入强化学习
             if config.rl:
                 tgt_vocab = data['tgt_vocab']
-                sample_pred = []
+                # 因为采样权重需要大于0，所以先进行softmax
+                out_soft,sample_pred =[],[]
                 for i in range(outputs.size(0)):
-                    sample_pred.append(torch.multinomial(outputs[i], 1))
-
-                # 计算 loss
-                criterion = nn.CrossEntropyLoss(ignore_index=utils.PAD, reduction='none')
-                criterion.cuda()
-                sample_loss = []  # [batch_size]
-                for i in range(outputs.size(1)):
-                    sample_loss.append(criterion(outputs[:, i, :], sample_pred[:, i]))
-                sample_loss = torch.tensor(sample_loss)
-
+                    tmp1 = outputs[i,:,:].squeeze()
+                    out_soft.append(nn.functional.softmax(tmp1, dim=1))
+                # 采样
+                for w in out_soft:
+                    sample_pred.append(torch.multinomial(w, 1, replacement=True).squeeze())
+                sample_pred = torch.stack(sample_pred)
+                # out_soft = nn.functional.softmax(outputs, dim=2)
+                sample_pred_sen_list = []
+                pred_sen_list = []
+                
+                sample_pred_ = sample_pred.t().cpu().numpy()
+                pred_ = pred.t().cpu().numpy()
+                ta = targets.cpu().numpy() 
                 # 转换为词
-                pred_sen_list = [" ".join(tgt_vocab.convertToLabels(sen, utils.EOS)) for sen in pred.t()]
-                sample_pred_sen_list = [" ".join(tgt_vocab.convertToLabels(sen, utils.EOS)) for sen in sample_pred.t()]
-                reference = [" ".join(list(ori_tgt[0])) for ori_tgt in original_tgt]
+                sample_pred_sen_list = [" ".join(tgt_vocab.convertToLabels(sen, utils.EOS)) for sen in sample_pred_]
+                pred_sen_list = [" ".join(tgt_vocab.convertToLabels(sen, utils.EOS)) for sen in pred_]
+                reference = [" ".join(tgt_vocab.convertToLabels(sen, utils.EOS)) for sen in ta]
 
                 # 计算 rouge
                 rouge = Rouge()
@@ -202,9 +222,19 @@ def train_model(model, data, optim, epoch, params):
                     pred_mean_score = 0.5 * (pred_score['rouge-2']['f'] + pred_score['rouge-l']['f'])
                     sample_mean_score = 0.5 * (sample_score['rouge-2']['f'] + sample_score['rouge-l']['f'])
                     neg_reward.append(sample_mean_score - pred_mean_score)
-
                 neg_reward = torch.tensor(neg_reward)
-                rl_loss = - torch.mul(sample_loss, neg_reward) / config.batch_size
+                ######需要对sample_pred进行padding，使结束符之后的sample不对loss起作用
+                # com_loss返回每句话的loss
+                sample_loss = []
+                criterion = nn.CrossEntropyLoss(ignore_index=utils.PAD, reduction='none')
+                for i in range(config.batch_size):
+                    tmp_sam = sample_pred.t()[i]
+                    # 需要对tmp_sam进行padding
+                    tmp_sam = padding(tmp_sam)
+                    sample_loss.append(torch.sum(com_loss(outputs[:, i, :], tmp_sam, criterion)))
+                sample_loss = torch.tensor(sample_loss)
+
+                rl_loss = - torch.sum(torch.mul(sample_loss, neg_reward)) / config.batch_size
             targets = targets.t()
             num_correct = pred.eq(targets).masked_select(targets.ne(utils.PAD)).sum().item()
             num_total = targets.ne(utils.PAD).sum().item()
@@ -358,7 +388,7 @@ def main():
     # checkpoint
     if opt.restore:
         print('loading checkpoint...\n')
-        checkpoints = torch.load(opt.restore, map_location='cuda:%d' % opt.gpus[0])
+        checkpoints = torch.load(opt.restore,map_location='cuda:%d' % opt.gpus[0])
     else:
         checkpoints = None
 

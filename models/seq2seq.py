@@ -55,8 +55,9 @@ class seq2seq(nn.Module):
                 inputs += [predicted]
                 outputs.append(output)
             outputs = torch.stack(outputs)
-
+        # 计算损失
         loss = self.compute_loss(outputs, targets)
+
         return loss, outputs
 
     def sample(self, src, src_len):

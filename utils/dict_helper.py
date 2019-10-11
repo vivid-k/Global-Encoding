@@ -189,7 +189,6 @@ class Dict(object):
     # Convert `idx` to labels. If index `stop` is reached, convert it and return.
     def convertToLabels(self, idx, stop, oovs=None):
         labels = []
-
         for i in idx:
             if i == stop:
                 break
