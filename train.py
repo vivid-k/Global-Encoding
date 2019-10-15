@@ -30,7 +30,7 @@ config = utils.read_config(opt.config)
 # 手动加入yaml参数
 config['data'] = './data/'
 config['logF'] = './experiments/lcsts/'
-config['epoch'] = 20
+config['epoch'] = 10
 config['batch_size'] = 64
 config['optim'] = 'adam'
 config['cell'] = 'lstm'
@@ -57,8 +57,8 @@ config['selfatt'] = True
 config['schesamp'] = False
 config['swish'] = True
 config['length_norm'] = True
-config['alpha'] = 0.3
-config['rl'] = False
+config['alpha'] = 0.5
+config['rl'] = True
 torch.manual_seed(opt.seed)
 opts.convert_to_config(opt, config)
 
@@ -104,8 +104,8 @@ def load_data():
             'src_vocab': src_vocab, 'tgt_vocab': tgt_vocab}
 
 def build_model(checkpoints, print_log):
-    for k, v in config.items():
-        print_log("%s:\t%s\n" % (str(k), str(v)))
+    # for k, v in config.items():
+    #     print_log("%s:\t%s\n" % (str(k), str(v)))
     
     # model
     print('building model...\n')
@@ -131,14 +131,14 @@ def build_model(checkpoints, print_log):
     optim.set_parameters(model.parameters())
 
     # print log
-    param_count = 0
-    for param in model.parameters():
-        param_count += param.view(-1).size()[0]
-    for k, v in config.items():
-        print_log("%s:\t%s\n" % (str(k), str(v)))
-    print_log("\n")
-    print_log(repr(model) + "\n\n")
-    print_log('total number of parameters: %d\n\n' % param_count)
+    # param_count = 0
+    # for param in model.parameters():
+    #     param_count += param.view(-1).size()[0]
+    # for k, v in config.items():
+    #     print_log("%s:\t%s\n" % (str(k), str(v)))
+    # print_log("\n")
+    # print_log(repr(model) + "\n\n")
+    # print_log('total number of parameters: %d\n\n' % param_count)
 
     return model, optim, print_log
 
@@ -149,10 +149,15 @@ def com_loss(outputs, targets, criterion):
     return loss
 def padding(data):
     has_eos = False
-    print(data)
     for i, w in enumerate(data):
         if w == utils.EOS:
             has_eos = True
+
+        # if i == 0 and has_eos == True:
+        #     print(data)
+        #     data[0] = utils.UNK
+        #     continue
+
         if has_eos == True:
             data[i] = utils.PAD
     return data
@@ -208,7 +213,13 @@ def train_model(model, data, optim, epoch, params):
                 pred_ = pred.t().cpu().numpy()
                 ta = targets.cpu().numpy() 
                 # 转换为词
-                sample_pred_sen_list = [" ".join(tgt_vocab.convertToLabels(sen, utils.EOS)) for sen in sample_pred_]
+                # sample_pred_sen_list = [" ".join(tgt_vocab.convertToLabels(sen, utils.EOS)) for sen in sample_pred_]
+                for sen in sample_pred_:
+                    a = [" ".join(tgt_vocab.convertToLabels(sen, utils.EOS))]
+                    if a == ['']:
+                        a = [utils.UNK_WORD]
+                    sample_pred_sen_list += a
+
                 pred_sen_list = [" ".join(tgt_vocab.convertToLabels(sen, utils.EOS)) for sen in pred_]
                 reference = [" ".join(tgt_vocab.convertToLabels(sen, utils.EOS)) for sen in ta]
 
@@ -219,10 +230,11 @@ def train_model(model, data, optim, epoch, params):
 
                 neg_reward = []
                 for pred_score, sample_score in zip(pred_score_list, sample_pred_score_list):
-                    pred_mean_score = 0.5 * (pred_score['rouge-2']['f'] + pred_score['rouge-l']['f'])
-                    sample_mean_score = 0.5 * (sample_score['rouge-2']['f'] + sample_score['rouge-l']['f'])
+                    pred_mean_score = 0.5 * pred_score['rouge-l']['f']
+                    sample_mean_score = 0.5 * sample_score['rouge-l']['f']
                     neg_reward.append(sample_mean_score - pred_mean_score)
                 neg_reward = torch.tensor(neg_reward)
+                
                 ######需要对sample_pred进行padding，使结束符之后的sample不对loss起作用
                 # com_loss返回每句话的loss
                 sample_loss = []
@@ -358,12 +370,13 @@ def build_log():
     # log
     if not os.path.exists(config.logF):
         os.mkdir(config.logF)
-    if opt.log == '':
-        log_path = config.logF + str(int(time.time() * 1000)) + '/'
-    else:
-        log_path = config.logF + opt.log + '/'
-    if not os.path.exists(log_path):
-        os.mkdir(log_path)
+    log_path = config.logF
+    # if opt.log == '':
+    #     log_path = config.logF + str(int(time.time() * 1000)) + '/'
+    # else:
+    #     log_path = config.logF + opt.log + '/'
+    # if not os.path.exists(log_path):
+    #     os.mkdir(log_path)
     print_log = utils.print_log(log_path + 'log.txt')
     return print_log, log_path
 
