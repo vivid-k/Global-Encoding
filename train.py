@@ -57,7 +57,7 @@ config['selfatt'] = True
 config['schesamp'] = False
 config['swish'] = True
 config['length_norm'] = True
-config['alpha'] = 0.5
+config['alpha'] = 0.8
 config['rl'] = True
 torch.manual_seed(opt.seed)
 opts.convert_to_config(opt, config)
@@ -214,11 +214,12 @@ def train_model(model, data, optim, epoch, params):
                 ta = targets.cpu().numpy() 
                 # 转换为词
                 # sample_pred_sen_list = [" ".join(tgt_vocab.convertToLabels(sen, utils.EOS)) for sen in sample_pred_]
-                for sen in sample_pred_:
-                    a = [" ".join(tgt_vocab.convertToLabels(sen, utils.EOS))]
-                    if a == ['']:
-                        a = [utils.UNK_WORD]
-                    sample_pred_sen_list += a
+                for i, sen in enumerate(sample_pred_):
+                    if sen[0] == utils.EOS:
+                        sample_pred_[i][0] = utils.UNK
+                for i, sen in enumerate(pred_):
+                    if sen[0] == utils.EOS:
+                        pred_[i][0] = utils.UNK             
 
                 pred_sen_list = [" ".join(tgt_vocab.convertToLabels(sen, utils.EOS)) for sen in pred_]
                 reference = [" ".join(tgt_vocab.convertToLabels(sen, utils.EOS)) for sen in ta]
@@ -239,7 +240,7 @@ def train_model(model, data, optim, epoch, params):
                 # com_loss返回每句话的loss
                 sample_loss = []
                 criterion = nn.CrossEntropyLoss(ignore_index=utils.PAD, reduction='none')
-                for i in range(config.batch_size):
+                for i in range(sample_pred.size(1)):
                     tmp_sam = sample_pred.t()[i]
                     # 需要对tmp_sam进行padding
                     tmp_sam = padding(tmp_sam)

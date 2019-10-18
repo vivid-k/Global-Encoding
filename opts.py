@@ -2,7 +2,7 @@ def model_opts(parser):
 
     parser.add_argument('-config', default='', type=str,
                         help="config file")
-    parser.add_argument('-gpus', default=[1], nargs='+', type=int,
+    parser.add_argument('-gpus', default=[0], nargs='+', type=int,
                         help="Use CUDA on the listed devices.")
     parser.add_argument('-restore', default='./experiments/lcsts/best_rouge_checkpoint.pt', type=str,
                         help="restore checkpoint")
@@ -28,7 +28,6 @@ def model_opts(parser):
     parser.add_argument('-max_split', type=int, default=0, help="max generator time steps for memory efficiency")
     parser.add_argument('-split_num', type=int, default=0, help="split number for splitres")
     parser.add_argument('-pretrain', default='', type=str, help="load pretrain encoder")
-
 
 def convert_to_config(opt, config):
     opt = vars(opt)
