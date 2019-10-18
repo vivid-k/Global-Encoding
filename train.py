@@ -213,7 +213,7 @@ def train_model(model, data, optim, epoch, params):
                 pred_ = pred.t().cpu().numpy()
                 ta = targets.cpu().numpy() 
                 # 转换为词
-                # sample_pred_sen_list = [" ".join(tgt_vocab.convertToLabels(sen, utils.EOS)) for sen in sample_pred_]
+                
                 for i, sen in enumerate(sample_pred_):
                     if sen[0] == utils.EOS:
                         sample_pred_[i][0] = utils.UNK
@@ -221,6 +221,7 @@ def train_model(model, data, optim, epoch, params):
                     if sen[0] == utils.EOS:
                         pred_[i][0] = utils.UNK             
 
+                sample_pred_sen_list = [" ".join(tgt_vocab.convertToLabels(sen, utils.EOS)) for sen in sample_pred_]
                 pred_sen_list = [" ".join(tgt_vocab.convertToLabels(sen, utils.EOS)) for sen in pred_]
                 reference = [" ".join(tgt_vocab.convertToLabels(sen, utils.EOS)) for sen in ta]
 
