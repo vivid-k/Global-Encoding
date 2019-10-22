@@ -2,9 +2,9 @@ def model_opts(parser):
 
     parser.add_argument('-config', default='', type=str,
                         help="config file")
-    parser.add_argument('-gpus', default=[0], nargs='+', type=int,
+    parser.add_argument('-gpus', default=[1], nargs='+', type=int,
                         help="Use CUDA on the listed devices.")
-    parser.add_argument('-restore', default='./experiments/lcsts/best_rouge_checkpoint.pt', type=str,
+    parser.add_argument('-restore', default=None, type=str,
                         help="restore checkpoint")
     parser.add_argument('-seed', type=int, default=1234,
                         help="Random seed")

@@ -4,15 +4,15 @@ import pickle
 
 parser = argparse.ArgumentParser(description='preprocess.py')
 
-parser.add_argument('-load_data', required=True,
+parser.add_argument('-load_data', type=str, default="",
                     help="input file for the data")
 
-parser.add_argument('-save_data', required=True,
+parser.add_argument('-save_data', type=str, default="",
                     help="Output file for the prepared data")
 
-parser.add_argument('-src_vocab_size', type=int, default=50000,
+parser.add_argument('-src_vocab_size', type=int, default=100000,
                     help="Size of the source vocabulary")
-parser.add_argument('-tgt_vocab_size', type=int, default=50000,
+parser.add_argument('-tgt_vocab_size', type=int, default=100000,
                     help="Size of the target vocabulary")
 parser.add_argument('-src_filter', type=int, default=0,
                     help="Maximum source sequence length")
@@ -35,8 +35,9 @@ parser.add_argument('-report_every', type=int, default=100000,
                     help="Report status every this many sentences")
 
 opt = parser.parse_args()
-
-
+opt.load_data = "./giga/"
+opt.save_data = "./giga_res/"
+opt.share = True
 def makeVocabulary(filename, trun_length, filter_length, char, vocab, size):
 
     print("%s: length limit = %d, truncate length = %d" % (filename, filter_length, trun_length))
