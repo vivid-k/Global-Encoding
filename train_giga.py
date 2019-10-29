@@ -29,7 +29,7 @@ opt = parser.parse_args()
 config = utils.read_config(opt.config)
 # 手动加入yaml参数
 config['data'] = './giga_res/'
-config['logF'] = './experiments/giga/'
+config['logF'] = './experiments/giga2/'
 config['epoch'] = 10
 config['batch_size'] = 64
 config['optim'] = 'adam'
@@ -45,12 +45,12 @@ config['dec_num_layers'] = 3
 config['enc_num_layers'] = 3
 config['bidirectional'] = True
 config['dropout'] = 0.1
-config['max_time_step'] = 50
+config['max_time_step'] = 30
 config['eval_interval'] = 10000
-config['save_interval'] = 3000
+config['save_interval'] = 4000
 config['metrics'] = ['rouge']
 config['shared_vocab'] = True
-config['beam_size'] = 10
+config['beam_size'] = 12
 config['unk'] = True
 config['schedule'] = False
 config['selfatt'] = True
@@ -59,11 +59,10 @@ config['swish'] = True
 config['length_norm'] = True
 config['alpha'] = 0.8
 config['rl'] = False
-config['dataset'] = "giga"
+
 torch.manual_seed(opt.seed)
 opts.convert_to_config(opt, config)
-# opt.restore = None
-
+# config.char = True
 # cuda
 use_cuda = torch.cuda.is_available() and len(opt.gpus) > 0
 config.use_cuda = use_cuda
@@ -318,21 +317,19 @@ def eval_model(model, data, params):
                 samples, alignment, weight = model.beam_sample(src, src_len, beam_size=config.beam_size, eval_=True)
             else:
                 samples, alignment = model.sample(src, src_len)
-        if config.dataset == "giga":
-            config.unk = False
-            candidate += [" ".join(tgt_vocab.convertToLabels(s, utils.EOS)) for s in samples]
-            source += [" ".join(ori_src) for ori_src in original_src]
-            reference += [" ".join(ori_tgt) for ori_tgt in original_tgt]
-        else:
-            candidate += ["".join(tgt_vocab.convertToLabels(s, utils.EOS)) for s in samples]
-            source += ["".join(ori_src) for ori_src in original_src]
-            reference += [" ".join(list(ori_tgt[0])) for ori_tgt in original_tgt]
+
+        # candidate += ["".join(tgt_vocab.convertToLabels(s, utils.EOS)) for s in samples]
+        # source += ["".join(ori_src) for ori_src in original_src]
+        # reference += [" ".join(list(ori_tgt[0])) for ori_tgt in original_tgt]
+        candidate += [tgt_vocab.convertToLabels(s, utils.EOS) for s in samples]
+        source += original_src
+        reference += original_tgt
+
         if alignment is not None:
             alignments += [align for align in alignment]
 
         count += len(original_src)
         utils.progress_bar(count, total_count)
-        break
 
     if config.unk and config.attention != 'None':
         cands = []
@@ -354,13 +351,10 @@ def eval_model(model, data, params):
     # 分别将candidate和reference写入文件
     with codecs.open(params['log_path']+'candidate.txt','w+','utf-8') as f:
         for i in range(len(candidate)):
-            if config.dataset == "giga":
-                f.write("".join(candidate[i])+'\n')
-            else:
-                f.write(" ".join(candidate[i])+'\n')
+            f.write(" ".join(candidate[i])+'\n')
     with codecs.open(params['log_path']+'reference.txt','w+','utf-8') as f:
         for i in range(len(reference)):
-            f.write("".join(reference[i])+'\n')
+            f.write(" ".join(reference[i])+'\n')
 
     score = {}
     for metric in config.metrics:

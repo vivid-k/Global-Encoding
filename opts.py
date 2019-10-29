@@ -4,7 +4,8 @@ def model_opts(parser):
                         help="config file")
     parser.add_argument('-gpus', default=[1], nargs='+', type=int,
                         help="Use CUDA on the listed devices.")
-    parser.add_argument('-restore', default=None, type=str,
+    parser.add_argument('-restore',
+            default=None, type=str,
                         help="restore checkpoint")
     parser.add_argument('-seed', type=int, default=1234,
                         help="Random seed")
@@ -28,6 +29,7 @@ def model_opts(parser):
     parser.add_argument('-max_split', type=int, default=0, help="max generator time steps for memory efficiency")
     parser.add_argument('-split_num', type=int, default=0, help="split number for splitres")
     parser.add_argument('-pretrain', default='', type=str, help="load pretrain encoder")
+    parser.add_argument('-transformer', action='store_true', help="encoder type")
 
 def convert_to_config(opt, config):
     opt = vars(opt)

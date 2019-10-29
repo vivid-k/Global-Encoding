@@ -3,6 +3,8 @@ import torch.nn as nn
 import utils
 import models
 import random
+import numpy as np
+from models.transformer import Encoder
 
 
 class seq2seq(nn.Module):
@@ -12,8 +14,13 @@ class seq2seq(nn.Module):
 
         if encoder is not None:
             self.encoder = encoder
-        else:
-            self.encoder = models.rnn_encoder(config)
+        else: 
+            if config.transformer:
+                # n_src_vocab, len_max_seq, d_word_vec,n_layers, n_head, d_k, d_v,d_model, d_inner,
+                self.encoder = Encoder(config.src_vocab_size, 100, config.emb_size, 6, 8, int(config.hidden_size/8),
+                                        int(config.hidden_size/8), config.hidden_size, config.hidden_size*4)
+            else:
+                self.encoder = models.rnn_encoder(config)
         tgt_embedding = self.encoder.embedding if config.shared_vocab else None
         if decoder is not None:
             self.decoder = decoder
@@ -30,15 +37,28 @@ class seq2seq(nn.Module):
         scores = scores.view(-1, scores.size(2))
         loss = self.criterion(scores, targets.contiguous().view(-1))
         return loss
-
+    
+    def compute_position(self, src):
+        batch_pos = np.array([
+        [pos_i+1 if w_i != utils.PAD else 0
+         for pos_i, w_i in enumerate(inst)] for inst in src])
+        return torch.LongTensor(batch_pos).cuda()
+    
     def forward(self, src, src_len, dec, targets, teacher_ratio=1.0):
         src = src.t()
         dec = dec.t()
         targets = targets.t()
         teacher = random.random() < teacher_ratio
 
-        contexts, state = self.encoder(src, src_len.tolist())
-
+        if self.config.transformer:
+            src = src.t()
+            src_pos = self.compute_position(src)
+            contexts, *_ = self.encoder(src, src_pos)
+            contexts = contexts.transpose(0, 1)
+            state = (torch.zeros(self.config.dec_num_layers, self.config.batch_size, self.config.hidden_size).cuda(), 
+                        torch.zeros(self.config.dec_num_layers, self.config.batch_size, self.config.hidden_size).cuda())
+        else:
+            contexts, state = self.encoder(src, src_len.tolist())
         if self.decoder.attention is not None:
             self.decoder.attention.init_context(context=contexts)
         outputs = []
@@ -104,7 +124,15 @@ class seq2seq(nn.Module):
         src = torch.index_select(src, dim=0, index=indices)
         src = src.t()
         batch_size = src.size(1)
-        contexts, encState = self.encoder(src, lengths.tolist())
+        if self.config.transformer:
+            src = src.t()
+            src_pos = self.compute_position(src)
+            contexts, *_ = self.encoder(src, src_pos)
+            contexts = contexts.transpose(0, 1)
+            encState = (torch.zeros(self.config.dec_num_layers, self.config.batch_size, self.config.hidden_size).cuda(), 
+                        torch.zeros(self.config.dec_num_layers, self.config.batch_size, self.config.hidden_size).cuda())
+        else:
+            contexts, encState = self.encoder(src, lengths.tolist())
 
         #  (1b) Initialize for the decoder.
         def var(a):
